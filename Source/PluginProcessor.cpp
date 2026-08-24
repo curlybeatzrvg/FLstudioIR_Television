@@ -94,15 +94,18 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
 juce::String FLstudioIR_TelevisionAudioProcessor::getMachineId()
 {
     juce::String rawId = juce::SystemStats::getComputerName() + juce::SystemStats::getLogonName();
-    auto hash = juce::SHA256::getDigestOf(rawId.toUTF8());
-    return "FLIR-" + hash.substring(0, 16).toUpperCase();
+    juce::SHA256 sha(rawId.toRawUTF8(), (size_t) rawId.getNumBytesAsUTF8());
+    auto hash = sha.toHexString().toUpperCase();
+    return "FLIR-" + hash.substring(0, 16);
 }
 
 bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& inputKey)
 {
     juce::String machineId = getMachineId();
     juce::String rawData = machineId + SECRET_SALT;
-    auto expectedHash = juce::SHA256::getDigestOf(rawData.toUTF8()).toUpperCase();
+    juce::SHA256 sha(rawData.toRawUTF8(), (size_t) rawData.getNumBytesAsUTF8());
+    auto expectedHash = sha.toHexString().toUpperCase();
+    
     juce::String expectedKey = "FLIR-" + expectedHash.substring(0, 4) + "-" +
                                        expectedHash.substring(4, 8) + "-" +
                                        expectedHash.substring(8, 12) + "-" +

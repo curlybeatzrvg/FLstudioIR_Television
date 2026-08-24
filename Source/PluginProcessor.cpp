@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include <fstream>
 #include <functional>
+#include <algorithm>
 
 static const juce::String SECRET_SALT = "FLstudioIR_Secret_LoFi_Key_2026_!@#";
 
@@ -31,13 +32,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout FLstudioIR_TelevisionAudioPr
 
 void FLstudioIR_TelevisionAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    tapeWarble.prepare(sampleRate, samplesPerBlock);
+    int numChannels = juce::jmax(1, getTotalNumOutputChannels());
+    tapeWarble.prepare(sampleRate, samplesPerBlock, numChannels);
     smartNoise.prepare(sampleRate);
     crtSaturation.prepare(sampleRate);
+    
     juce::dsp::ProcessSpec spec;
     spec.sampleRate = sampleRate;
     spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
-    spec.numChannels = static_cast<juce::uint32>(getTotalNumOutputChannels());
+    spec.numChannels = static_cast<juce::uint32>(numChannels);
     tvFilter.prepare(spec);
 }
 
@@ -73,14 +76,16 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     crtSaturation.setCrushAmount(crushVal);
     crtSaturation.process(buffer);
 
+    // محافظت از کرش فیلترها
+    int activeChannels = std::min(totalNumInputChannels, buffer.getNumChannels());
     tvFilter.setFilterAmount(filterVal, getSampleRate());
-    juce::dsp::AudioBlock<float> block (buffer);
+    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
     tvFilter.process(block);
 
     smartNoise.setNoiseLevel(noiseVal);
     smartNoise.process(buffer);
 
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    for (int channel = 0; channel < activeChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer(channel);
         const auto* dryData = dryBuffer.getReadPointer(channel);
@@ -117,6 +122,8 @@ bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& i
         juce::File licenseFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                                  .getChildFile("FLstudioIR")
                                  .getChildFile("Television.lic");
+        // باید حتماً قبل از ذخیره، پوشه ساخته شود
+        licenseFile.getParentDirectory().createDirectory(); 
         licenseFile.replaceWithText(inputKey);
         return true;
     }

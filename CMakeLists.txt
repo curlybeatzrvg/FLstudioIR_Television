@@ -28,7 +28,7 @@ target_sources(FLstudioIR_Television PRIVATE
 target_link_libraries(FLstudioIR_Television PRIVATE
     juce::juce_audio_utils
     juce::juce_dsp
-    juce::gui_extra
+    juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
 )

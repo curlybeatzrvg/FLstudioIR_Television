@@ -42,6 +42,9 @@ void FLstudioIR_TelevisionAudioProcessor::prepareToPlay (double sampleRate, int 
     spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
     spec.numChannels = static_cast<juce::uint32>(numChannels);
     tvFilter.prepare(spec);
+
+    // آماده‌سازی امن حافظه بدون ایجاد بار روی سی‌پی‌یو
+    dryBuffer.setSize(numChannels, samplesPerBlock);
 }
 
 void FLstudioIR_TelevisionAudioProcessor::releaseResources()
@@ -61,7 +64,9 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
         return; 
     }
 
-    // خواندن کاملاً امن پارامترها برای جلوگیری از نشت حافظه
+    int activeChannels = std::min(totalNumInputChannels, buffer.getNumChannels());
+    if (activeChannels == 0 || buffer.getNumSamples() == 0) return; // محافظت از خالی بودن صدا
+
     auto* crushParam = parameters.getRawParameterValue("crush");
     auto* filterParam = parameters.getRawParameterValue("filter");
     auto* noiseParam = parameters.getRawParameterValue("noise");
@@ -74,8 +79,12 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     float warbleVal = warbleParam != nullptr ? warbleParam->load() : 0.2f;
     float mixVal    = mixParam != nullptr ? mixParam->load() : 1.0f;
 
-    juce::AudioBuffer<float> dryBuffer;
-    dryBuffer.makeCopyOf(buffer);
+    // کپی کاملاً امن و ضدکرش برای Dry/Wet
+    for (int ch = 0; ch < activeChannels; ++ch) {
+        if (ch < dryBuffer.getNumChannels()) {
+            dryBuffer.copyFrom(ch, 0, buffer.getReadPointer(ch), buffer.getNumSamples());
+        }
+    }
 
     tapeWarble.setParameters(2.0f, warbleVal * 15.0f);
     tapeWarble.process(buffer);
@@ -83,24 +92,22 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     crtSaturation.setCrushAmount(crushVal);
     crtSaturation.process(buffer);
 
-    int activeChannels = std::min(totalNumInputChannels, buffer.getNumChannels());
-    if (activeChannels > 0)
-    {
-        tvFilter.setFilterAmount(filterVal, getSampleRate());
-        juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
-        tvFilter.process(block);
-    }
+    tvFilter.setFilterAmount(filterVal, getSampleRate());
+    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
+    tvFilter.process(block);
 
     smartNoise.setNoiseLevel(noiseVal);
     smartNoise.process(buffer);
 
     for (int channel = 0; channel < activeChannels; ++channel)
     {
-        auto* channelData = buffer.getWritePointer(channel);
-        const auto* dryData = dryBuffer.getReadPointer(channel);
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-        {
-            channelData[sample] = (dryData[sample] * (1.0f - mixVal)) + (channelData[sample] * mixVal);
+        if (channel < dryBuffer.getNumChannels()) {
+            auto* channelData = buffer.getWritePointer(channel);
+            const auto* dryData = dryBuffer.getReadPointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            {
+                channelData[sample] = (dryData[sample] * (1.0f - mixVal)) + (channelData[sample] * mixVal);
+            }
         }
     }
 }

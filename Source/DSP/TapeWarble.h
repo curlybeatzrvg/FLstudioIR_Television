@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <algorithm>
+#include <cmath>
 
 namespace lulu_dsp 
 {
@@ -9,7 +10,7 @@ namespace lulu_dsp
     public:
         TapeWarble() = default;
 
-        void prepare(double sampleRate, int samplesPerBlock, int maxChannels) 
+        void prepare(double sampleRate, int /*samplesPerBlock*/, int maxChannels) 
         {
             currentSampleRate = std::max(10.0, sampleRate);
             delayBuffer.setSize(maxChannels, static_cast<int>(currentSampleRate) + 1); 
@@ -21,7 +22,7 @@ namespace lulu_dsp
         void setParameters(float rateHz, float depthMs) 
         {
             lfoRate = rateHz;
-            lfoDepth = depthMs * (currentSampleRate / 1000.0f);
+            lfoDepth = depthMs * static_cast<float>(currentSampleRate / 1000.0);
         }
 
         void process(juce::AudioBuffer<float>& buffer) 
@@ -42,9 +43,9 @@ namespace lulu_dsp
                     float lfoValue = std::sin(currentLfoPhase * juce::MathConstants<float>::twoPi);
                     float delayTime = lfoDepth * (0.5f + 0.5f * lfoValue); 
                     
-                    float readPosition = currentWritePos - delayTime;
-                    while (readPosition < 0.0f) readPosition += delayBuffer.getNumSamples();
-                    while (readPosition >= delayBuffer.getNumSamples()) readPosition -= delayBuffer.getNumSamples();
+                    float readPosition = static_cast<float>(currentWritePos) - delayTime;
+                    while (readPosition < 0.0f) readPosition += static_cast<float>(delayBuffer.getNumSamples());
+                    while (readPosition >= static_cast<float>(delayBuffer.getNumSamples())) readPosition -= static_cast<float>(delayBuffer.getNumSamples());
 
                     float interpolatedSample = getLinearInterpolatedSample(channel, readPosition);
                     delayBuffer.setSample(channel, currentWritePos, channelData[i]);
@@ -53,13 +54,13 @@ namespace lulu_dsp
                     currentWritePos++;
                     if (currentWritePos >= delayBuffer.getNumSamples()) currentWritePos = 0;
                     
-                    currentLfoPhase += (lfoRate / currentSampleRate);
+                    currentLfoPhase += (lfoRate / static_cast<float>(currentSampleRate));
                     if (currentLfoPhase >= 1.0f) currentLfoPhase -= 1.0f;
                 }
             }
             
             writePosition = (writePosition + numSamples) % delayBuffer.getNumSamples();
-            lfoPhase += (lfoRate / currentSampleRate) * numSamples;
+            lfoPhase += (lfoRate / static_cast<float>(currentSampleRate)) * static_cast<float>(numSamples);
             while (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
         }
 

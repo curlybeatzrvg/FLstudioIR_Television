@@ -76,7 +76,6 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     crtSaturation.setCrushAmount(crushVal);
     crtSaturation.process(buffer);
 
-    // محافظت از کرش فیلترها
     int activeChannels = std::min(totalNumInputChannels, buffer.getNumChannels());
     tvFilter.setFilterAmount(filterVal, getSampleRate());
     juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
@@ -104,6 +103,14 @@ juce::String FLstudioIR_TelevisionAudioProcessor::getMachineId()
     return "FLIR-" + hash.substring(0, 16);
 }
 
+// تغییر مسیر ذخیره لایسنس به پوشه Documents برای جلوگیری از کرش
+juce::File FLstudioIR_TelevisionAudioProcessor::getLicenseFile()
+{
+    return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+           .getChildFile("FLstudioIR")
+           .getChildFile("Television.lic");
+}
+
 bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& inputKey)
 {
     juce::String machineId = getMachineId();
@@ -119,10 +126,9 @@ bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& i
     if (inputKey.trim() == expectedKey)
     {
         isUnlocked = true;
-        juce::File licenseFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                 .getChildFile("FLstudioIR")
-                                 .getChildFile("Television.lic");
-        // باید حتماً قبل از ذخیره، پوشه ساخته شود
+        juce::File licenseFile = getLicenseFile();
+        
+        // اطمینان از ساخته شدن پوشه
         licenseFile.getParentDirectory().createDirectory(); 
         licenseFile.replaceWithText(inputKey);
         return true;
@@ -132,9 +138,7 @@ bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& i
 
 void FLstudioIR_TelevisionAudioProcessor::checkSavedLicense()
 {
-    juce::File licenseFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                             .getChildFile("FLstudioIR")
-                             .getChildFile("Television.lic");
+    juce::File licenseFile = getLicenseFile();
     if (licenseFile.existsAsFile())
     {
         juce::String savedKey = licenseFile.loadFileAsString();

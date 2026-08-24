@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <algorithm>
 
 namespace lulu_dsp 
 {
@@ -8,10 +9,11 @@ namespace lulu_dsp
     public:
         TapeWarble() = default;
 
-        void prepare(double sampleRate, int samplesPerBlock) 
+        void prepare(double sampleRate, int samplesPerBlock, int maxChannels) 
         {
             currentSampleRate = sampleRate;
-            delayBuffer.setSize(2, static_cast<int>(sampleRate) + 1); 
+            // داینامیک کردن مموری برای جلوگیری از کرش در اف ال استودیو
+            delayBuffer.setSize(maxChannels, static_cast<int>(sampleRate) + 1); 
             delayBuffer.clear();
             lfoPhase = 0.0f;
             writePosition = 0;
@@ -25,7 +27,8 @@ namespace lulu_dsp
 
         void process(juce::AudioBuffer<float>& buffer) 
         {
-            const int numChannels = buffer.getNumChannels();
+            // جلوگیری از خواندن کانال‌های اضافی که اف ال استودیو می‌فرستد
+            const int numChannels = std::min(buffer.getNumChannels(), delayBuffer.getNumChannels());
             const int numSamples = buffer.getNumSamples();
 
             for (int channel = 0; channel < numChannels; ++channel) 
@@ -35,7 +38,11 @@ namespace lulu_dsp
                 {
                     float lfoValue = std::sin(lfoPhase * juce::MathConstants<float>::twoPi);
                     float delayTime = lfoDepth * (0.5f + 0.5f * lfoValue); 
-                    float readPosition = std::fmod(writePosition - delayTime + delayBuffer.getNumSamples(), delayBuffer.getNumSamples());
+                    
+                    float readPosition = writePosition - delayTime;
+                    while (readPosition < 0.0f) readPosition += delayBuffer.getNumSamples(); // امنیت حافظه
+                    readPosition = std::fmod(readPosition, delayBuffer.getNumSamples());
+
                     float interpolatedSample = getLinearInterpolatedSample(channel, readPosition);
                     delayBuffer.setSample(channel, writePosition, channelData[i]);
                     channelData[i] = interpolatedSample;

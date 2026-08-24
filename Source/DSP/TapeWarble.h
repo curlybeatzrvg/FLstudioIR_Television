@@ -11,9 +11,8 @@ namespace lulu_dsp
 
         void prepare(double sampleRate, int samplesPerBlock, int maxChannels) 
         {
-            currentSampleRate = sampleRate;
-            // داینامیک کردن مموری برای جلوگیری از کرش در اف ال استودیو
-            delayBuffer.setSize(maxChannels, static_cast<int>(sampleRate) + 1); 
+            currentSampleRate = std::max(10.0, sampleRate);
+            delayBuffer.setSize(maxChannels, static_cast<int>(currentSampleRate) + 1); 
             delayBuffer.clear();
             lfoPhase = 0.0f;
             writePosition = 0;
@@ -27,7 +26,8 @@ namespace lulu_dsp
 
         void process(juce::AudioBuffer<float>& buffer) 
         {
-            // جلوگیری از خواندن کانال‌های اضافی که اف ال استودیو می‌فرستد
+            if (delayBuffer.getNumSamples() == 0 || delayBuffer.getNumChannels() == 0) return; // قفل امنیتی
+
             const int numChannels = std::min(buffer.getNumChannels(), delayBuffer.getNumChannels());
             const int numSamples = buffer.getNumSamples();
 
@@ -40,7 +40,7 @@ namespace lulu_dsp
                     float delayTime = lfoDepth * (0.5f + 0.5f * lfoValue); 
                     
                     float readPosition = writePosition - delayTime;
-                    while (readPosition < 0.0f) readPosition += delayBuffer.getNumSamples(); // امنیت حافظه
+                    while (readPosition < 0.0f) readPosition += delayBuffer.getNumSamples();
                     readPosition = std::fmod(readPosition, delayBuffer.getNumSamples());
 
                     float interpolatedSample = getLinearInterpolatedSample(channel, readPosition);

@@ -122,6 +122,7 @@ void FLstudioIR_TelevisionAudioProcessorEditor::buttonClicked(juce::Button* b)
         if (audioProcessor.verifyLicenseKey(keyEntered))
         {
             hideActivationPanel();
+            resized(); // << این خط اضافه شد تا ناب‌ها بعد از باز شدن قفل ظاهر شوند
             repaint();
         }
         else

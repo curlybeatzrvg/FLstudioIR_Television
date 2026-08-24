@@ -19,32 +19,35 @@ FLstudioIR_TelevisionAudioProcessor::~FLstudioIR_TelevisionAudioProcessor()
 {
 }
 
+// ساختار جدید و استاندارد برای جلوگیری از کرش گرافیکی
 juce::AudioProcessorValueTreeState::ParameterLayout FLstudioIR_TelevisionAudioProcessor::createParameterLayout()
 {
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("crush", "Crush", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("filter", "Filter", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("noise", "Noise", juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -40.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("warble", "Warble", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.2f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("mix", "Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
-    return { params.begin(), params.end() };
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("crush", 1), "Crush", 0.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("filter", 1), "Filter", 0.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("noise", 1), "Noise", -60.0f, 0.0f, -40.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("warble", 1), "Warble", 0.0f, 1.0f, 0.2f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mix", 1), "Mix", 0.0f, 1.0f, 1.0f));
+    return layout;
 }
 
 void FLstudioIR_TelevisionAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    int numChannels = juce::jmax(1, getTotalNumOutputChannels());
-    tapeWarble.prepare(sampleRate, samplesPerBlock, numChannels);
+    // آماده‌سازی حافظه برای سنگین‌ترین حالت اف ال استودیو
+    int maxCh = 4; 
+    int maxSamples = samplesPerBlock * 4; 
+
+    tapeWarble.prepare(sampleRate, maxSamples, maxCh);
     smartNoise.prepare(sampleRate);
     crtSaturation.prepare(sampleRate);
     
     juce::dsp::ProcessSpec spec;
     spec.sampleRate = std::max(10.0, sampleRate);
-    spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
-    spec.numChannels = static_cast<juce::uint32>(numChannels);
+    spec.maximumBlockSize = static_cast<juce::uint32>(maxSamples);
+    spec.numChannels = static_cast<juce::uint32>(maxCh);
     tvFilter.prepare(spec);
 
-    // آماده‌سازی امن حافظه بدون ایجاد بار روی سی‌پی‌یو
-    dryBuffer.setSize(numChannels, samplesPerBlock);
+    dryBuffer.setSize(maxCh, maxSamples);
 }
 
 void FLstudioIR_TelevisionAudioProcessor::releaseResources()
@@ -54,18 +57,19 @@ void FLstudioIR_TelevisionAudioProcessor::releaseResources()
 void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+    for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    if (!isUnlocked) {
-        return; 
-    }
+    if (!isUnlocked) return; 
 
-    int activeChannels = std::min(totalNumInputChannels, buffer.getNumChannels());
-    if (activeChannels == 0 || buffer.getNumSamples() == 0) return; // محافظت از خالی بودن صدا
+    int numSamples = buffer.getNumSamples();
+    int numChannels = buffer.getNumChannels();
+
+    // محافظت مطلق: اگر اف ال استودیو صدای غیرمجاز فرستاد پردازش نکن
+    if (numSamples == 0  numChannels == 0  numSamples > dryBuffer.getNumSamples() || numChannels > dryBuffer.getNumChannels()) return;
+
+    int activeChannels = std::min(numChannels, dryBuffer.getNumChannels());
 
     auto* crushParam = parameters.getRawParameterValue("crush");
     auto* filterParam = parameters.getRawParameterValue("filter");
@@ -79,11 +83,8 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     float warbleVal = warbleParam != nullptr ? warbleParam->load() : 0.2f;
     float mixVal    = mixParam != nullptr ? mixParam->load() : 1.0f;
 
-    // کپی کاملاً امن و ضدکرش برای Dry/Wet
     for (int ch = 0; ch < activeChannels; ++ch) {
-        if (ch < dryBuffer.getNumChannels()) {
-            dryBuffer.copyFrom(ch, 0, buffer.getReadPointer(ch), buffer.getNumSamples());
-        }
+        dryBuffer.copyFrom(ch, 0, buffer.getReadPointer(ch), numSamples);
     }
 
     tapeWarble.setParameters(2.0f, warbleVal * 15.0f);
@@ -93,31 +94,29 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     crtSaturation.process(buffer);
 
     tvFilter.setFilterAmount(filterVal, getSampleRate());
-    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
+    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, numSamples);
     tvFilter.process(block);
 
     smartNoise.setNoiseLevel(noiseVal);
     smartNoise.process(buffer);
 
-    for (int channel = 0; channel < activeChannels; ++channel)
+    for (int ch = 0; ch < activeChannels; ++ch)
     {
-        if (channel < dryBuffer.getNumChannels()) {
-            auto* channelData = buffer.getWritePointer(channel);
-            const auto* dryData = dryBuffer.getReadPointer(channel);
-            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-            {
-                channelData[sample] = (dryData[sample] * (1.0f - mixVal)) + (channelData[sample] * mixVal);
-            }
+        auto* channelData = buffer.getWritePointer(ch);
+        const auto* dryData = dryBuffer.getReadPointer(ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            channelData[i] = (dryData[i] * (1.0f - mixVal)) + (channelData[i] * mixVal);
         }
     }
 }
 
+// الگوریتم بومی و ضدکرش MD5
 juce::String FLstudioIR_TelevisionAudioProcessor::getMachineId()
 {
     juce::String rawId = juce::SystemStats::getComputerName() + juce::SystemStats::getLogonName();
-    juce::SHA256 sha(rawId.toRawUTF8(), (size_t) rawId.getNumBytesAsUTF8());
-    auto hash = sha.toHexString().toUpperCase();
-    return "FLIR-" + hash.substring(0, 16);
+    juce::MD5 md5(rawId.toUTF8());
+    return "FLIR-" + md5.toHexString().toUpperCase().substring(0, 16);
 }
 
 juce::File FLstudioIR_TelevisionAudioProcessor::getLicenseFile()
@@ -131,8 +130,8 @@ bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& i
 {
     juce::String machineId = getMachineId();
     juce::String rawData = machineId + SECRET_SALT;
-    juce::SHA256 sha(rawData.toRawUTF8(), (size_t) rawData.getNumBytesAsUTF8());
-    auto expectedHash = sha.toHexString().toUpperCase();
+    juce::MD5 md5(rawData.toUTF8());
+    auto expectedHash = md5.toHexString().toUpperCase();
     
     juce::String expectedKey = "FLIR-" + expectedHash.substring(0, 4) + "-" +
                                        expectedHash.substring(4, 8) + "-" +
@@ -143,7 +142,6 @@ bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& i
     {
         isUnlocked = true;
         juce::File licenseFile = getLicenseFile();
-        
         licenseFile.getParentDirectory().createDirectory(); 
         licenseFile.replaceWithText(inputKey);
         return true;
@@ -168,15 +166,20 @@ void FLstudioIR_TelevisionAudioProcessor::getStateInformation (juce::MemoryBlock
 {
     auto state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
-    copyXmlToBinary (*xml, destData);
+    if (xml != nullptr) copyXmlToBinary (*xml, destData);
 }
 
 void FLstudioIR_TelevisionAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
     if (xmlState != nullptr)
+    {
         if (xmlState->hasTagName (parameters.state.getType()))
-            parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
+        {
+            juce::ValueTree tree = juce::ValueTree::fromXml (*xmlState);
+            if (tree.isValid()) parameters.replaceState (tree);
+        }
+    }
 }
 
 juce::AudioProcessorEditor* FLstudioIR_TelevisionAudioProcessor::createEditor()

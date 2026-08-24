@@ -38,6 +38,9 @@ private:
     juce::TextEditor licenseInputBox;
     juce::TextButton unlockButton;
     juce::Label machineIdDisplay;
+    
+    // دکمه جدید برای کپی کردن Machine ID
+    juce::TextButton copyIdButton; 
 
     juce::Colour flirOrange = juce::Colour::fromString("#FFFF6600"); 
     juce::Colour flirGreen  = juce::Colour::fromString("#FF00FF66");

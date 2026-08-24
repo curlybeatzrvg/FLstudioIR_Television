@@ -4,6 +4,7 @@
 #include "DSP/NoiseGenerator.h"
 #include "DSP/CrtSaturation.h"
 #include "DSP/TvFilter.h"
+#include <atomic>
 
 class FLstudioIR_TelevisionAudioProcessor : public juce::AudioProcessor
 {
@@ -35,7 +36,7 @@ public:
     bool verifyLicenseKey(const juce::String& inputKey);
     juce::String getMachineId();
     juce::File getLicenseFile();
-    bool isPluginUnlocked() const { return isUnlocked; }
+    bool isPluginUnlocked() const { return isUnlocked.load(); }
 
     juce::AudioProcessorValueTreeState parameters;
 
@@ -47,10 +48,11 @@ private:
     lulu_dsp::CrtSaturation crtSaturation;
     lulu_dsp::TvFilter tvFilter;
 
-    // اضافه شدن حافظه امن برای ولوم Mix
     juce::AudioBuffer<float> dryBuffer;
+    
+    // قفل اتمیک برای جلوگیری از کرش موقع زدن دکمه
+    std::atomic<bool> isUnlocked { false }; 
 
-    bool isUnlocked = false; 
     void checkSavedLicense(); 
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FLstudioIR_TelevisionAudioProcessor)

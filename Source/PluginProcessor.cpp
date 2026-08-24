@@ -158,7 +158,7 @@ juce::AudioProcessorEditor* FLstudioIR_TelevisionAudioProcessor::createEditor()
     return new FLstudioIR_TelevisionAudioProcessorEditor (*this);
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginProcessor()
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new FLstudioIR_TelevisionAudioProcessor();
 }

@@ -12,8 +12,9 @@ FLstudioIR_TelevisionAudioProcessorEditor::FLstudioIR_TelevisionAudioProcessorEd
     setupKnobAndLabel(warbleKnob, warbleLabel, "WARBLE", warbleAttachment, "warble");
     setupKnobAndLabel(mixKnob, mixLabel, "MIX", mixAttachment, "mix");
 
+    // تنظیمات باکس لایسنس (ویژگی Ghost Text اضافه شد)
     licenseInputBox.setMultiLine(false);
-    licenseInputBox.setText("Enter FLstudioIR License Key...", false);
+    licenseInputBox.setTextToShowWhenEmpty("Enter FLstudioIR License Key here...", juce::Colours::grey); // متن گوست
     licenseInputBox.setColour(juce::TextEditor::backgroundColourId, darkCarbon);
     licenseInputBox.setColour(juce::TextEditor::textColourId, flirOrange);
     addAndMakeVisible(licenseInputBox);
@@ -28,6 +29,13 @@ FLstudioIR_TelevisionAudioProcessorEditor::FLstudioIR_TelevisionAudioProcessorEd
     machineIdDisplay.setJustificationType(juce::Justification::centred);
     machineIdDisplay.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(machineIdDisplay);
+
+    // تنظیمات دکمه کپی کردن Machine ID
+    copyIdButton.setButtonText("COPY ID");
+    copyIdButton.setColour(juce::TextButton::buttonColourId, juce::Colours::darkgrey);
+    copyIdButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    copyIdButton.addListener(this);
+    addAndMakeVisible(copyIdButton);
 
     if (audioProcessor.isPluginUnlocked()) {
         hideActivationPanel();
@@ -69,7 +77,9 @@ void FLstudioIR_TelevisionAudioProcessorEditor::paint (juce::Graphics& g)
         
         g.setColour(juce::Colours::lightgrey);
         g.setFont(14.0f);
-        g.drawFittedText("Send your Machine ID to @FLstudioIR on Instagram to get your unique license key.", getLocalBounds().withY(100).withHeight(50), juce::Justification::centred, 2);
+        
+        // اینجا هم پیام را آپدیت کردم تا مشتری بداند اگر سوالی داشت می‌تواند از بات تلگرامت استفاده کند
+        g.drawFittedText("Send your Machine ID to @FLstudioIR on Instagram to get your unique license key.\nFor support or plugin requests, use our Telegram Bot.", getLocalBounds().withY(100).withHeight(60), juce::Justification::centred, 2);
     }
     else 
     {
@@ -86,9 +96,12 @@ void FLstudioIR_TelevisionAudioProcessorEditor::resized()
 {
     if (!audioProcessor.isPluginUnlocked())
     {
-        machineIdDisplay.setBounds(100, 160, 600, 30);
-        licenseInputBox.setBounds(200, 210, 400, 30);
-        unlockButton.setBounds(300, 260, 200, 40);
+        // چیدمان جدید برای دکمه کپی کنار نوشته Machine ID
+        machineIdDisplay.setBounds(100, 170, 500, 30);
+        copyIdButton.setBounds(600, 175, 80, 20); 
+
+        licenseInputBox.setBounds(200, 220, 400, 30);
+        unlockButton.setBounds(300, 270, 200, 40);
     }
     else
     {
@@ -116,13 +129,22 @@ void FLstudioIR_TelevisionAudioProcessorEditor::resized()
 
 void FLstudioIR_TelevisionAudioProcessorEditor::buttonClicked(juce::Button* b)
 {
-    if (b == &unlockButton)
+    // اگر کاربر روی دکمه Copy کلیک کرد
+    if (b == &copyIdButton) 
+    {
+        juce::SystemClipboard::copyTextToClipboard(audioProcessor.getMachineId());
+        copyIdButton.setButtonText("COPIED!");
+        copyIdButton.setColour(juce::TextButton::buttonColourId, flirGreen);
+        copyIdButton.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
+    }
+    // اگر کاربر روی دکمه Unlock کلیک کرد
+    else if (b == &unlockButton) 
     {
         juce::String keyEntered = licenseInputBox.getText();
         if (audioProcessor.verifyLicenseKey(keyEntered))
         {
             hideActivationPanel();
-            resized(); // << این خط اضافه شد تا ناب‌ها بعد از باز شدن قفل ظاهر شوند
+            resized(); 
             repaint();
         }
         else
@@ -137,6 +159,7 @@ void FLstudioIR_TelevisionAudioProcessorEditor::hideActivationPanel()
     licenseInputBox.setVisible(false);
     unlockButton.setVisible(false);
     machineIdDisplay.setVisible(false);
+    copyIdButton.setVisible(false); // دکمه کپی هم مخفی شود
 }
 
 void FLstudioIR_TelevisionAudioProcessorEditor::drawCrtScreen(juce::Graphics& g, juce::Rectangle<int> bounds)

@@ -18,6 +18,9 @@ juce_add_plugin(FLstudioIR_Television
     PRODUCT_NAME "FLstudioIR Television"
 )
 
+# این همون دستور جادوییه که ربات فراموش کرده بود اجرا کنه
+juce_generate_juce_header(FLstudioIR_Television)
+
 target_sources(FLstudioIR_Television PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h

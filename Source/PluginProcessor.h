@@ -34,6 +34,10 @@ public:
 
     bool verifyLicenseKey(const juce::String& inputKey);
     juce::String getMachineId();
+    
+    // شناسنامه تابع جدید مسیر فایل لایسنس (همین یک خط جا مانده بود!)
+    juce::File getLicenseFile();
+
     bool isPluginUnlocked() const { return isUnlocked; }
 
     juce::AudioProcessorValueTreeState parameters;

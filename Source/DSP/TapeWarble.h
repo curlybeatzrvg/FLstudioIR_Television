@@ -26,7 +26,7 @@ namespace lulu_dsp
 
         void process(juce::AudioBuffer<float>& buffer) 
         {
-            if (delayBuffer.getNumSamples() == 0 || delayBuffer.getNumChannels() == 0) return; // قفل امنیتی
+            if (delayBuffer.getNumSamples() == 0 || delayBuffer.getNumChannels() == 0) return;
 
             const int numChannels = std::min(buffer.getNumChannels(), delayBuffer.getNumChannels());
             const int numSamples = buffer.getNumSamples();
@@ -34,31 +34,45 @@ namespace lulu_dsp
             for (int channel = 0; channel < numChannels; ++channel) 
             {
                 float* channelData = buffer.getWritePointer(channel);
+                int currentWritePos = writePosition;
+                float currentLfoPhase = lfoPhase;
+
                 for (int i = 0; i < numSamples; ++i) 
                 {
-                    float lfoValue = std::sin(lfoPhase * juce::MathConstants<float>::twoPi);
+                    float lfoValue = std::sin(currentLfoPhase * juce::MathConstants<float>::twoPi);
                     float delayTime = lfoDepth * (0.5f + 0.5f * lfoValue); 
                     
-                    float readPosition = writePosition - delayTime;
+                    float readPosition = currentWritePos - delayTime;
                     while (readPosition < 0.0f) readPosition += delayBuffer.getNumSamples();
-                    readPosition = std::fmod(readPosition, delayBuffer.getNumSamples());
+                    while (readPosition >= delayBuffer.getNumSamples()) readPosition -= delayBuffer.getNumSamples();
 
                     float interpolatedSample = getLinearInterpolatedSample(channel, readPosition);
-                    delayBuffer.setSample(channel, writePosition, channelData[i]);
+                    delayBuffer.setSample(channel, currentWritePos, channelData[i]);
                     channelData[i] = interpolatedSample;
+
+                    currentWritePos++;
+                    if (currentWritePos >= delayBuffer.getNumSamples()) currentWritePos = 0;
+                    
+                    currentLfoPhase += (lfoRate / currentSampleRate);
+                    if (currentLfoPhase >= 1.0f) currentLfoPhase -= 1.0f;
                 }
             }
-            lfoPhase += (lfoRate / currentSampleRate) * numSamples;
-            if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
+            
             writePosition = (writePosition + numSamples) % delayBuffer.getNumSamples();
+            lfoPhase += (lfoRate / currentSampleRate) * numSamples;
+            while (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
         }
 
     private:
         float getLinearInterpolatedSample(int channel, float readPos) 
         {
             int index1 = static_cast<int>(readPos);
+            if (index1 >= delayBuffer.getNumSamples()) index1 = delayBuffer.getNumSamples() - 1;
+            if (index1 < 0) index1 = 0;
+            
             int index2 = (index1 + 1) % delayBuffer.getNumSamples();
-            float fraction = readPos - index1;
+            float fraction = readPos - static_cast<float>(index1);
+            
             return delayBuffer.getSample(channel, index1) * (1.0f - fraction) + delayBuffer.getSample(channel, index2) * fraction;
         }
 

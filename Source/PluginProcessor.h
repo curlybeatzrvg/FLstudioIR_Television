@@ -34,10 +34,7 @@ public:
 
     bool verifyLicenseKey(const juce::String& inputKey);
     juce::String getMachineId();
-    
-    // شناسنامه تابع جدید مسیر فایل لایسنس (همین یک خط جا مانده بود!)
     juce::File getLicenseFile();
-
     bool isPluginUnlocked() const { return isUnlocked; }
 
     juce::AudioProcessorValueTreeState parameters;
@@ -49,6 +46,9 @@ private:
     lulu_dsp::SmartNoise smartNoise;
     lulu_dsp::CrtSaturation crtSaturation;
     lulu_dsp::TvFilter tvFilter;
+
+    // اضافه شدن حافظه امن برای ولوم Mix
+    juce::AudioBuffer<float> dryBuffer;
 
     bool isUnlocked = false; 
     void checkSavedLicense(); 

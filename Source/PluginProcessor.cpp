@@ -19,7 +19,6 @@ FLstudioIR_TelevisionAudioProcessor::~FLstudioIR_TelevisionAudioProcessor()
 {
 }
 
-// ساختار جدید و استاندارد برای جلوگیری از کرش گرافیکی
 juce::AudioProcessorValueTreeState::ParameterLayout FLstudioIR_TelevisionAudioProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -33,9 +32,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout FLstudioIR_TelevisionAudioPr
 
 void FLstudioIR_TelevisionAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // آماده‌سازی حافظه برای سنگین‌ترین حالت اف ال استودیو
-    int maxCh = 4; 
-    int maxSamples = samplesPerBlock * 4; 
+    int maxCh = 4;
+    int maxSamples = samplesPerBlock * 4;
 
     tapeWarble.prepare(sampleRate, maxSamples, maxCh);
     smartNoise.prepare(sampleRate);
@@ -58,18 +56,23 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
+    int totalNumInputChannels = getTotalNumInputChannels();
+    int totalNumOutputChannels = getTotalNumOutputChannels();
+
+    for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    if (!isUnlocked) return; 
+    if (!isUnlocked) return;
 
     int numSamples = buffer.getNumSamples();
     int numChannels = buffer.getNumChannels();
 
-    // محافظت مطلق: اگر اف ال استودیو صدای غیرمجاز فرستاد پردازش نکن
-    if (numSamples == 0  numChannels == 0  numSamples > dryBuffer.getNumSamples() || numChannels > dryBuffer.getNumChannels()) return;
+    if (numSamples <= 0 || numChannels <= 0) return;
 
     int activeChannels = std::min(numChannels, dryBuffer.getNumChannels());
+    int activeSamples = std::min(numSamples, dryBuffer.getNumSamples());
+
+    if (activeChannels <= 0 || activeSamples <= 0) return;
 
     auto* crushParam = parameters.getRawParameterValue("crush");
     auto* filterParam = parameters.getRawParameterValue("filter");
@@ -84,7 +87,7 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     float mixVal    = mixParam != nullptr ? mixParam->load() : 1.0f;
 
     for (int ch = 0; ch < activeChannels; ++ch) {
-        dryBuffer.copyFrom(ch, 0, buffer.getReadPointer(ch), numSamples);
+        dryBuffer.copyFrom(ch, 0, buffer.getReadPointer(ch), activeSamples);
     }
 
     tapeWarble.setParameters(2.0f, warbleVal * 15.0f);
@@ -94,7 +97,7 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     crtSaturation.process(buffer);
 
     tvFilter.setFilterAmount(filterVal, getSampleRate());
-    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, numSamples);
+    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), (size_t)activeChannels, (size_t)activeSamples);
     tvFilter.process(block);
 
     smartNoise.setNoiseLevel(noiseVal);
@@ -104,14 +107,13 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     {
         auto* channelData = buffer.getWritePointer(ch);
         const auto* dryData = dryBuffer.getReadPointer(ch);
-        for (int i = 0; i < numSamples; ++i)
+        for (int i = 0; i < activeSamples; ++i)
         {
             channelData[i] = (dryData[i] * (1.0f - mixVal)) + (channelData[i] * mixVal);
         }
     }
 }
 
-// الگوریتم بومی و ضدکرش MD5
 juce::String FLstudioIR_TelevisionAudioProcessor::getMachineId()
 {
     juce::String rawId = juce::SystemStats::getComputerName() + juce::SystemStats::getLogonName();

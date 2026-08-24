@@ -1,0 +1,33 @@
+name: Build FLstudioIR Television VST3
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout Project Code
+      uses: actions/checkout@v4
+
+    - name: Download JUCE Framework
+      uses: actions/checkout@v4
+      with:
+        repository: juce-framework/JUCE
+        ref: 8.0.0
+        path: JUCE
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+    - name: Build Plugin
+      run: cmake --build build --config Release
+
+    - name: Upload VST3 File
+      uses: actions/upload-artifact@v4
+      with:
+        name: FLstudioIR_Television_Windows_VST3
+        path: build/**/*_artefacts/Release/VST3/*.vst3

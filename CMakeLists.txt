@@ -18,7 +18,6 @@ juce_add_plugin(FLstudioIR_Television
     PRODUCT_NAME "FLstudioIR Television"
 )
 
-# این همون دستور جادوییه که ربات فراموش کرده بود اجرا کنه
 juce_generate_juce_header(FLstudioIR_Television)
 
 target_sources(FLstudioIR_Television PRIVATE
@@ -32,6 +31,7 @@ target_link_libraries(FLstudioIR_Television PRIVATE
     juce::juce_audio_utils
     juce::juce_dsp
     juce::juce_gui_extra
+    juce::juce_cryptography
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
 )

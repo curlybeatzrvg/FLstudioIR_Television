@@ -38,7 +38,7 @@ void FLstudioIR_TelevisionAudioProcessor::prepareToPlay (double sampleRate, int 
     crtSaturation.prepare(sampleRate);
     
     juce::dsp::ProcessSpec spec;
-    spec.sampleRate = sampleRate;
+    spec.sampleRate = std::max(10.0, sampleRate);
     spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
     spec.numChannels = static_cast<juce::uint32>(numChannels);
     tvFilter.prepare(spec);
@@ -61,11 +61,18 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
         return; 
     }
 
-    float crushVal  = parameters.getRawParameterValue("crush")->load();
-    float filterVal = parameters.getRawParameterValue("filter")->load();
-    float noiseVal  = parameters.getRawParameterValue("noise")->load();
-    float warbleVal = parameters.getRawParameterValue("warble")->load();
-    float mixVal    = parameters.getRawParameterValue("mix")->load();
+    // خواندن کاملاً امن پارامترها برای جلوگیری از نشت حافظه
+    auto* crushParam = parameters.getRawParameterValue("crush");
+    auto* filterParam = parameters.getRawParameterValue("filter");
+    auto* noiseParam = parameters.getRawParameterValue("noise");
+    auto* warbleParam = parameters.getRawParameterValue("warble");
+    auto* mixParam = parameters.getRawParameterValue("mix");
+
+    float crushVal  = crushParam != nullptr ? crushParam->load() : 0.0f;
+    float filterVal = filterParam != nullptr ? filterParam->load() : 0.0f;
+    float noiseVal  = noiseParam != nullptr ? noiseParam->load() : -40.0f;
+    float warbleVal = warbleParam != nullptr ? warbleParam->load() : 0.2f;
+    float mixVal    = mixParam != nullptr ? mixParam->load() : 1.0f;
 
     juce::AudioBuffer<float> dryBuffer;
     dryBuffer.makeCopyOf(buffer);
@@ -77,9 +84,12 @@ void FLstudioIR_TelevisionAudioProcessor::processBlock (juce::AudioBuffer<float>
     crtSaturation.process(buffer);
 
     int activeChannels = std::min(totalNumInputChannels, buffer.getNumChannels());
-    tvFilter.setFilterAmount(filterVal, getSampleRate());
-    juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
-    tvFilter.process(block);
+    if (activeChannels > 0)
+    {
+        tvFilter.setFilterAmount(filterVal, getSampleRate());
+        juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), activeChannels, buffer.getNumSamples());
+        tvFilter.process(block);
+    }
 
     smartNoise.setNoiseLevel(noiseVal);
     smartNoise.process(buffer);
@@ -103,7 +113,6 @@ juce::String FLstudioIR_TelevisionAudioProcessor::getMachineId()
     return "FLIR-" + hash.substring(0, 16);
 }
 
-// تغییر مسیر ذخیره لایسنس به پوشه Documents برای جلوگیری از کرش
 juce::File FLstudioIR_TelevisionAudioProcessor::getLicenseFile()
 {
     return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
@@ -128,7 +137,6 @@ bool FLstudioIR_TelevisionAudioProcessor::verifyLicenseKey(const juce::String& i
         isUnlocked = true;
         juce::File licenseFile = getLicenseFile();
         
-        // اطمینان از ساخته شدن پوشه
         licenseFile.getParentDirectory().createDirectory(); 
         licenseFile.replaceWithText(inputKey);
         return true;
